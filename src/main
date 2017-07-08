@@ -1,70 +1,72 @@
 #!/bin/bash
-function wait {
-  pid=$!
 
-  spin[0]="-"
-  spin[1]="\\"
-  spin[2]="|"
-  spin[3]="/"
-  echo
-  echo -n "$@ ${spin[0]}"
-  while kill -0 $pid 2>/dev/null; do  
-    for i in "${spin[@]}"; do
-        echo -ne "\b$i"
-	sleep 0.1
+function wait {
+    pid=$!
+
+    spin[0]="-"
+    spin[1]="\\"
+    spin[2]="|"
+    spin[3]="/"
+    echo
+    echo -n "$@ ${spin[0]}"
+    while kill -0 $pid 2>/dev/null; do  
+        for i in "${spin[@]}"; do
+            echo -ne "\b$i"
+        sleep 0.1
+        done
     done
-  done
-  echo
+    echo
 }
 
 function openDeviceConnection {
-  adb wait-for-device &
-  wait "Looking for USB connected device (time to connect yours)" 
-  ID=$(adb devices | awk -F'device' '{if (match($0, /device$/)) print $1}')
-  IP=$(adb shell ifconfig wlan0 | awk '{if (sub(/inet addr:/,"")) print $1 }') 
-  echo "- found device with ID $ID and IP $IP"
+    adb wait-for-device &
+        wait "Looking for USB connected device (time to connect yours)" 
+    ID=$(adb devices | awk -F'device' '{if (match($0, /device$/)) print $1}' | sed -e 's/[[:space:]]*$//')
+    IP=$(adb shell ifconfig wlan0 | awk '{if (sub(/inet addr:/,"")) print $1 }') 
+    echo "- found device with ID $ID and IP $IP"
 
-  adb tcpip 5555 1>/dev/null &
-  wait "Openning connection"
-  echo "- connection open on device port 5555"
-  echo
+    adb tcpip 5555 1>/dev/null &
+        wait "Openning connection"
+    echo "- connection open on device port 5555"
+    echo
 }
 
 function connect {
-  read -p "Disconnect USB cable and press RETURN to continue" -n 1 -r
-  echo
-  if [[ -z $REPLY ]]; then
+    read -p "Disconnect USB cable and press RETURN to continue" -n 1 -r
+    echo
+    if [[ -z $REPLY ]]; then
     adb connect $IP:5555 1>/dev/null &
-    wait "Connecting to device"
-  else
+        wait "Connecting to device"
+    else
     connect
-  fi
+    fi
 }
 
 function coldIgnite {
-  (adb kill-server 1>/dev/null; adb devices 1>/dev/null) &
-  wait "Starting adb server"
+    (adb kill-server 1>/dev/null; adb devices 1>/dev/null) &
+        wait "Starting adb server"
 }
 
 function start {
-  coldIgnite
-  openDeviceConnection
-  connect
-  show_options
+    coldIgnite
+    openDeviceConnection
+    connect
+    show_options
 }
 
 function show_options {
-  adb wait-for-device && echo "Debugging device at: $IP:5555" 
-  read -p "(r) restart | (q) quit" -n 1 -r
-  echo
-  if [[ $REPLY =~ ^[q]$ ]]; then
-    adb disconnect
-    exit 0
-  elif [[ $REPLY =~ ^[r]$ ]]; then
-    start
-  else
-    show_options
-  fi
+    adb wait-for-device && 
+        echo "Debugging device at: $IP:5555" 
+    read -p "(r) restart | (q) quit" -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[q]$ ]]; then
+        adb disconnect
+        exit 0
+    elif [[ $REPLY =~ ^[r]$ ]]; then
+        start
+        else
+        show_options
+    fi
 }
 
 start
