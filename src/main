@@ -79,7 +79,7 @@ function show_status {
 
 function show_options {
     echo `show_status`
-    read -p "(s) update_status | (r) restart | (q) quit" -n 1 -r
+    read -p "(s) update status | (r) restart | (q) quit" -n 1 -r
     echo
     if [[ $REPLY =~ ^[qQ]$ ]]; then
         disconnect_from_adb &&
