@@ -1,5 +1,9 @@
 #!/bin/bash
 
+. "color_setup" && color_setup
+
+PORT=5555
+
 function wait {
     pid=$!
 
@@ -18,24 +22,29 @@ function wait {
     echo
 }
 
+function getDeviceID {
+    echo $(adb devices | awk -F'device' '{if (match($0, /device$/)) print $1}' | sed -e 's/[[:space:]]*$//')
+}
+
 function openDeviceConnection {
     adb wait-for-device &
         wait "Looking for USB connected device (time to connect yours)" 
-    ID=$(adb devices | awk -F'device' '{if (match($0, /device$/)) print $1}' | sed -e 's/[[:space:]]*$//')
-    IP=$(adb shell ifconfig wlan0 | awk '{if (sub(/inet addr:/,"")) print $1 }') 
-    echo "- found device with ID $ID and IP $IP"
+    local wiredID="$(getDeviceID)"
+    IP=$(adb shell ifconfig wlan0 | awk '{if (sub(/inet addr:/,"")) print $1 }')
+    echo "- found device with ID $wiredID and IP $IP"
 
-    adb tcpip 5555 1>/dev/null &
+    adb tcpip $PORT 1>/dev/null &
         wait "Openning connection"
-    echo "- connection open on device port 5555"
+    echo "- connection open on device port $PORT"
     echo
+    ID="$IP:$PORT"
 }
 
 function connect {
     read -p "Disconnect USB cable and press RETURN to continue" -n 1 -r
     echo
     if [[ -z $REPLY ]]; then
-    adb connect $IP:5555 1>/dev/null &
+    adb connect $IP:$PORT 1>/dev/null &
         wait "Connecting to device"
     else
     connect
@@ -48,23 +57,40 @@ function coldIgnite {
 }
 
 function start {
-    coldIgnite
-    openDeviceConnection
-    connect
+    coldIgnite &&
+    openDeviceConnection &&
+    connect &&
     show_options
 }
 
+function disconnect_from_adb {
+    adb disconnect
+}
+
+function show_status {
+    printf "\033c"
+    local updatedID="$(getDeviceID)"
+    if [[ "$ID" == "$updatedID" ]]; then
+        echo -ne "\b$(colorize $GREEN ✔) Connected to $ID"
+    else
+        echo -ne "\b$(colorize $RED ✘) Disconnected"
+    fi
+}
+
 function show_options {
-    adb wait-for-device && 
-        echo "Debugging device at: $IP:5555" 
-    read -p "(r) restart | (q) quit" -n 1 -r
+    echo `show_status`
+    read -p "(s) update_status | (r) restart | (q) quit" -n 1 -r
     echo
-    if [[ $REPLY =~ ^[q]$ ]]; then
-        adb disconnect
+    if [[ $REPLY =~ ^[qQ]$ ]]; then
+        disconnect_from_adb &&
         exit 0
-    elif [[ $REPLY =~ ^[r]$ ]]; then
+    elif [[ $REPLY =~ ^[rR]$ ]]; then
         start
-        else
+    elif [[ $REPLY =~ ^[sS]$ ]]; then
+        show_status &&
+        show_options
+    else
+        echo "Invalid option"
         show_options
     fi
 }
